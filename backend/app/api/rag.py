@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db import get_db
 from app.deps import get_current_user
 from app.models import DocNode, Document, KnowledgeBase, SpaceMember, User
@@ -51,7 +52,20 @@ def _hit_to_out(h: SearchHit) -> SearchHitOut:
         knowledge_base_id=h.knowledge_base_id,
         seq=h.seq,
         node_title=h.node_title,
+        heading=h.heading,
     )
+
+
+def _extra_queries(query: str) -> list[str]:
+    """query 改写（可选）：返回除原查询外的补充查询；任何失败安全回退为空。"""
+    if not settings.use_query_rewrite:
+        return []
+    try:
+        from app.rag.query import rewrite_queries
+
+        return rewrite_queries(query, settings.query_rewrite_count)[1:]
+    except Exception:
+        return []
 
 
 def _check_kb_access(db: Session, user: User, kb_ids: list[str]) -> None:
@@ -117,7 +131,7 @@ def search_endpoint(
 ):
     allowed = _check_kb_access(db, user, body.kb_ids)
     try:
-        hits = search(db, body.query, allowed, top_k=body.top_k)
+        hits = search(db, body.query, allowed, top_k=body.top_k, extra_queries=_extra_queries(body.query))
     except HTTPException:
         raise
     except Exception as exc:
@@ -133,7 +147,7 @@ def ask(
 ):
     allowed = _check_kb_access(db, user, body.kb_ids)
     try:
-        hits = search(db, body.query, allowed, top_k=body.top_k)
+        hits = search(db, body.query, allowed, top_k=body.top_k, extra_queries=_extra_queries(body.query))
         answer = generate_answer(body.query, hits)
     except HTTPException:
         raise

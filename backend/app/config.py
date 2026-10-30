@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     rerank_provider: str = "lexical"  # lexical | cross-encoder
     rerank_model: str = "BAAI/bge-reranker-base"
 
+    # Query 改写/扩展（LLM 生成多路查询；需 LLM 可用，失败安全回退）
+    use_query_rewrite: bool = False
+    query_rewrite_count: int = 3
+
     # 跨域白名单（逗号分隔）；留空则开发态放开为 *（不携带凭证）
     cors_origins: str = ""
     # 分享链接生成的站点地址

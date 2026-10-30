@@ -24,6 +24,8 @@ def build_prompt(query: str, hits: List[SearchHit]) -> str:
     for i, h in enumerate(hits, 1):
         title = h.node_title or h.document_title or "未命名文档"
         loc = f"《{title}》"
+        if getattr(h, "heading", ""):
+            loc += f" › {h.heading}"
         if getattr(h, "seq", None):
             loc += f"（片段{h.seq + 1}）"
         body = getattr(h, "context", "") or h.content

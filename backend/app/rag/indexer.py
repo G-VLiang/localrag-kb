@@ -1,12 +1,12 @@
-"""文档索引：把 Document 内容切片、向量化、写入 doc_chunks。"""
+"""文档索引：按标题分块 → 切片 → 向量化 → 写入 doc_chunks（含标题路径）。"""
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
-from app.models import DocChunk, DocNode, Document, KnowledgeBase
+from app.models import DocChunk, DocNode, Document
 from app.rag.chunker import split_text
 from app.rag.embedding import get_embedding_provider
-from app.rag.extractor import extract_text
+from app.rag.extractor import extract_blocks
 
 
 def index_document(db: Session, document: Document) -> int:
@@ -18,31 +18,36 @@ def index_document(db: Session, document: Document) -> int:
     # 先清空旧 chunk
     db.execute(delete(DocChunk).where(DocChunk.document_id == document.id))
 
-    text = extract_text(document.content, document.content_format)
-    if not text:
-        db.commit()
-        return 0
+    blocks = extract_blocks(document.content, document.content_format)
+    # meta: (content, heading_path, embed_text)
+    meta = []
+    for b in blocks:
+        path = b.get("path") or ""
+        for piece in split_text(b["text"]):
+            # 标题路径拼入 embedding 文本，提升按标题语义的召回
+            embed_text = f"{path}\n{piece}" if path else piece
+            meta.append((piece, path, embed_text))
 
-    chunks_text = split_text(text)
-    if not chunks_text:
+    if not meta:
         db.commit()
         return 0
 
     provider = get_embedding_provider()
-    embeddings = provider.embed(chunks_text)
+    embeddings = provider.embed([m[2] for m in meta])
 
-    for seq, (chunk_text, emb) in enumerate(zip(chunks_text, embeddings)):
+    for seq, ((content, heading, _), emb) in enumerate(zip(meta, embeddings)):
         db.add(
             DocChunk(
                 document_id=document.id,
                 knowledge_base_id=node.knowledge_base_id,
                 seq=seq,
-                content=chunk_text,
+                content=content,
+                heading=heading or None,
                 embedding=emb,
             )
         )
     db.commit()
-    return len(chunks_text)
+    return len(meta)
 
 
 def index_knowledge_base(db: Session, kb_id: str) -> int:

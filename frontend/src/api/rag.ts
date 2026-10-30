@@ -8,6 +8,9 @@ export interface SearchHit {
   score: number
   document_title: string
   knowledge_base_id: string
+  seq?: number
+  node_title?: string
+  heading?: string
 }
 
 export interface AskResponse {

@@ -25,6 +25,7 @@ class SearchHitOut(BaseModel):
     knowledge_base_id: str
     seq: int = 0
     node_title: str = ""
+    heading: str = ""
 
 
 class SearchRequest(BaseModel):

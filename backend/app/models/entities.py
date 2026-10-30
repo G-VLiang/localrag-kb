@@ -163,6 +163,8 @@ class DocChunk(Base, TimestampMixin):
     # 片段在原文中的位置（序号）
     seq: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    # 该片段所处的标题路径（如「一级 > 二级」），用于引用与召回增强
+    heading: Mapped[str | None] = mapped_column(Text, nullable=True)
     # bge-m3 默认 1024 维
     embedding: Mapped[list[float]] = mapped_column(Vector(1024), nullable=True)
     # 全文检索用 tsvector（BM25 融合）

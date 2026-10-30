@@ -29,6 +29,7 @@ class SearchHit:
     knowledge_base_id: str
     seq: int = 0
     node_title: str = ""
+    heading: str = ""  # 命中片段所处标题路径
     context: str = ""  # 父块扩展后的上下文（供 LLM 使用，缺省等于 content）
 
 
@@ -191,13 +192,24 @@ def _expand_context(db: Session, hits: List[SearchHit], window: int, max_chars: 
     return kept_hits
 
 
-def search(db: Session, query: str, kb_ids: List[str], top_k: int = 5) -> List[SearchHit]:
+def search(
+    db: Session,
+    query: str,
+    kb_ids: List[str],
+    top_k: int = 5,
+    extra_queries: List[str] | None = None,
+) -> List[SearchHit]:
     provider = get_embedding_provider()
-    query_vec = provider.embed_query(query)
+    # 多路查询（原文 + 改写）各自召回，RRF 累加融合
+    queries = [query] + [q for q in (extra_queries or []) if q and q.strip() and q != query]
 
-    vec_scores = _vector_search(db, query_vec, kb_ids, top_k)
-    bm25_scores = _bm25_search(db, query, kb_ids, top_k)
-    fused = _rrf_fusion(vec_scores, bm25_scores)
+    fused: Dict[str, float] = {}
+    for q in queries:
+        qvec = provider.embed_query(q)
+        vec_scores = _vector_search(db, qvec, kb_ids, top_k)
+        bm25_scores = _bm25_search(db, q, kb_ids, top_k)
+        for cid, s in _rrf_fusion(vec_scores, bm25_scores).items():
+            fused[cid] = fused.get(cid, 0.0) + s
 
     candidates = sorted(fused, key=fused.get, reverse=True)[: max(top_k * 4, 20)]
     if not candidates:
@@ -255,6 +267,7 @@ def search(db: Session, query: str, kb_ids: List[str], top_k: int = 5) -> List[S
                 knowledge_base_id=c.knowledge_base_id,
                 seq=c.seq if getattr(c, "seq", None) is not None else 0,
                 node_title=title,
+                heading=getattr(c, "heading", "") or "",
             )
         )
 
