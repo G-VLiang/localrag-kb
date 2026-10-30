@@ -1,15 +1,17 @@
-"""混合检索：pgvector 向量召回 + BM25 关键词（textsearch_zh）融合 + 可选重排。"""
+"""混合检索：pgvector 向量召回 + BM25 关键词召回 + RRF 融合 + 词法重排（中文友好）。"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Dict, List
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models import DocChunk, DocNode, Document, KnowledgeBase
 from app.rag.embedding import get_embedding_provider
+from app.rag.tokenizer import lexical_score
 
 
 @dataclass
@@ -21,10 +23,12 @@ class SearchHit:
     score: float
     document_title: str
     knowledge_base_id: str
+    seq: int = 0
+    node_title: str = ""
 
 
-def _vector_search(db: Session, query_vec: List[float], kb_ids: List[str], top_k: int) -> dict[str, float]:
-    """向量余弦相似度召回，返回 {chunk_id: similarity}。"""
+def _vector_search(db: Session, query_vec: List[float], kb_ids: List[str], top_k: int) -> Dict[str, float]:
+    """向量余弦相似度召回（扩大召回窗口供后续重排）。返回 {chunk_id: sim}。"""
     rows = db.execute(
         text(
             """
@@ -35,14 +39,13 @@ def _vector_search(db: Session, query_vec: List[float], kb_ids: List[str], top_k
             LIMIT :k
             """
         ),
-        {"vec": query_vec, "kb_ids": kb_ids, "k": top_k * 2},
+        {"vec": query_vec, "kb_ids": kb_ids, "k": top_k * 4},
     ).fetchall()
     return {r[0]: float(r[1]) for r in rows}
 
 
-def _bm25_search(db: Session, query: str, kb_ids: List[str], top_k: int) -> dict[str, float]:
-    """BM25 关键词召回（pgroonga 未启用时退化为 ILIKE 兜底）。返回 {chunk_id: score}。"""
-    # 优先用 pgroonga 的 textsearch 中文分词；未安装则退化为包含匹配
+def _bm25_search(db: Session, query: str, kb_ids: List[str], top_k: int) -> Dict[str, float]:
+    """BM25 关键词召回（pgroonga 未启用时退化为 ILIKE 包含匹配）。返回 {chunk_id: score}。"""
     try:
         rows = db.execute(
             text(
@@ -55,10 +58,9 @@ def _bm25_search(db: Session, query: str, kb_ids: List[str], top_k: int) -> dict
                 LIMIT :k
                 """
             ),
-            {"q": query, "kb_ids": kb_ids, "k": top_k},
+            {"q": query, "kb_ids": kb_ids, "k": top_k * 4},
         ).fetchall()
     except Exception:
-        # 兜底：纯关键词包含匹配
         rows = db.execute(
             text(
                 """
@@ -69,27 +71,22 @@ def _bm25_search(db: Session, query: str, kb_ids: List[str], top_k: int) -> dict
                 LIMIT :k
                 """
             ),
-            {"q": query, "kb_ids": kb_ids, "k": top_k},
+            {"q": query, "kb_ids": kb_ids, "k": top_k * 4},
         ).fetchall()
     return {r[0]: float(r[1]) for r in rows}
 
 
-def _rrf_fusion(vector_scores: dict[str, float], bm25_scores: dict[str, float], k: int = 60) -> dict[str, float]:
+def _rrf_fusion(vector_scores: Dict[str, float], bm25_scores: Dict[str, float], k: int = 60) -> Dict[str, float]:
     """Reciprocal Rank Fusion 融合两路召回。"""
-    fusion: dict[str, float] = {}
-    for rank, cid in enumerate(vector_scores):
+    fusion: Dict[str, float] = {}
+    for rank, cid in enumerate(sorted(vector_scores, key=vector_scores.get, reverse=True)):
         fusion[cid] = fusion.get(cid, 0) + 1.0 / (k + rank + 1)
-    for rank, cid in enumerate(bm25_scores):
+    for rank, cid in enumerate(sorted(bm25_scores, key=bm25_scores.get, reverse=True)):
         fusion[cid] = fusion.get(cid, 0) + 1.0 / (k + rank + 1)
     return fusion
 
 
-def search(
-    db: Session,
-    query: str,
-    kb_ids: List[str],
-    top_k: int = 5,
-) -> List[SearchHit]:
+def search(db: Session, query: str, kb_ids: List[str], top_k: int = 5) -> List[SearchHit]:
     provider = get_embedding_provider()
     query_vec = provider.embed_query(query)
 
@@ -97,16 +94,14 @@ def search(
     bm25_scores = _bm25_search(db, query, kb_ids, top_k)
     fused = _rrf_fusion(vec_scores, bm25_scores)
 
-    # 取 top_k
-    ranked_ids = sorted(fused, key=fused.get, reverse=True)[:top_k]
-    if not ranked_ids:
+    # 候选：融合分数前 N（扩大召回再重排）
+    candidates = sorted(fused, key=fused.get, reverse=True)[: max(top_k * 4, 20)]
+    if not candidates:
         return []
 
-    # 批量取 chunk + 关联文档标题
-    chunks = db.query(DocChunk).filter(DocChunk.id.in_(ranked_ids)).all()
+    chunks = db.query(DocChunk).filter(DocChunk.id.in_(candidates)).all()
     chunk_map = {c.id: c for c in chunks}
 
-    # 关联 node/title
     doc_ids = {c.document_id for c in chunks}
     docs = db.query(Document).filter(Document.id.in_(doc_ids)).all()
     doc_map = {d.id: d for d in docs}
@@ -115,22 +110,35 @@ def search(
     nodes = db.query(DocNode).filter(DocNode.id.in_(node_ids)).all()
     node_map = {n.id: n for n in nodes}
 
-    hits: List[SearchHit] = []
-    for cid in ranked_ids:
+    max_fused = max(fused.values()) or 1.0
+    scored = []
+    for cid in candidates:
         c = chunk_map.get(cid)
         if not c:
             continue
         d = doc_map.get(c.document_id)
         node = node_map.get(d.node_id) if d else None
+        fused_norm = fused[cid] / max_fused
+        # 重排：融合分（向量+BM25）与词法相关性（中文友好）各占一半
+        final = (0.5 * fused_norm + 0.5 * lexical_score(query, c.content)) if settings.use_rerank else fused_norm
+        scored.append((final, cid, c, d, node))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    hits: List[SearchHit] = []
+    for final, _cid, c, d, node in scored[:top_k]:
+        title = node.title if node else ""
         hits.append(
             SearchHit(
                 chunk_id=c.id,
                 document_id=c.document_id,
                 node_id=d.node_id if d else "",
                 content=c.content,
-                score=round(fused[cid], 4),
-                document_title=node.title if node else "",
+                score=round(final, 4),
+                document_title=title,
                 knowledge_base_id=c.knowledge_base_id,
+                seq=c.seq if hasattr(c, "seq") else 0,
+                node_title=title,
             )
         )
     return hits

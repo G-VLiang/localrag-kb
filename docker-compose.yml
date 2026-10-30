@@ -49,6 +49,7 @@ services:
       LLM_API_BASE: ${LLM_API_BASE:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost}
+      USE_RERANK: ${USE_RERANK:-true}
       HF_ENDPOINT: https://hf-mirror.com
       HF_HUB_DISABLE_TELEMETRY: "1"
       HF_HUB_DISABLE_XET: "1"

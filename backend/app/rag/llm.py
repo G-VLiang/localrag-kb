@@ -22,9 +22,16 @@ SYSTEM_PROMPT = """你是一个知识库问答助手。请基于提供的参考�
 def build_prompt(query: str, hits: List[SearchHit]) -> str:
     ctx_parts = []
     for i, h in enumerate(hits, 1):
-        ctx_parts.append(f"[{i}] 《{h.document_title}》\n{h.content}")
+        title = h.node_title or h.document_title or "未命名文档"
+        loc = f"《{title}》"
+        if getattr(h, "seq", None):
+            loc += f"（片段{h.seq + 1}）"
+        ctx_parts.append(f"[{i}] {loc}\n{h.content}")
     context = "\n\n".join(ctx_parts)
-    return f"参考资料：\n{context}\n\n用户问题：{query}\n\n请回答："
+    return (
+        f"参考资料：\n{context}\n\n用户问题：{query}\n\n"
+        f"请回答，并在正文中用 [1]、[2]… 标注引用所对应的参考资料编号："
+    )
 
 
 def _call_ollama(messages: List[dict]) -> str:

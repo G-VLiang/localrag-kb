@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     chunk_size: int = 800
     chunk_overlap: int = 120
     top_k: int = 5
-    use_rerank: bool = False
+    use_rerank: bool = True  # 融合召回后做词法重排（中文友好），可设 false 退回纯 RRF
 
     # 跨域白名单（逗号分隔）；留空则开发态放开为 *（不携带凭证）
     cors_origins: str = ""

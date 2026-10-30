@@ -2,3 +2,5 @@
 # 安装：pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements-rag.txt
 # 若不装，请将 .env 的 EMBEDDING_PROVIDER 设为 ollama 或 openai
 sentence-transformers==3.3.1
+# 中文分词增强（rerank 词法信号），可选；不装则退化为单字切分
+jieba==0.42.1

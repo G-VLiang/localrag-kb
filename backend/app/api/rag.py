@@ -49,6 +49,8 @@ def _hit_to_out(h: SearchHit) -> SearchHitOut:
         score=h.score,
         document_title=h.document_title,
         knowledge_base_id=h.knowledge_base_id,
+        seq=h.seq,
+        node_title=h.node_title,
     )
 
 

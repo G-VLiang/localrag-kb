@@ -23,6 +23,8 @@ class SearchHitOut(BaseModel):
     score: float
     document_title: str
     knowledge_base_id: str
+    seq: int = 0
+    node_title: str = ""
 
 
 class SearchRequest(BaseModel):
