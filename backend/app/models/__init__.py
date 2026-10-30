@@ -1,4 +1,5 @@
 from app.models.entities import (
+    AuditLog,
     DocChunk,
     DocNode,
     Document,
@@ -20,4 +21,5 @@ __all__ = [
     "DocumentVersion",
     "DocChunk",
     "ShareLink",
+    "AuditLog",
 ]

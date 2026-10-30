@@ -3,7 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.api import auth, documents, knowledge_bases, rag, share, spaces
+from app.core.audit import AuditMiddleware
+from app.api import audit, auth, documents, knowledge_bases, rag, share, spaces
 
 app = FastAPI(title=settings.app_name, debug=settings.debug)
 
@@ -19,6 +20,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 审计：对写操作自动留痕（不阻塞主流程）
+app.add_middleware(AuditMiddleware)
 
 
 @app.exception_handler(Exception)
@@ -36,6 +40,7 @@ app.include_router(knowledge_bases.router, prefix=api_prefix)
 app.include_router(documents.router, prefix=api_prefix)
 app.include_router(rag.router, prefix=api_prefix)
 app.include_router(share.router, prefix=api_prefix)
+app.include_router(audit.router, prefix=api_prefix)
 
 
 @app.get("/health")

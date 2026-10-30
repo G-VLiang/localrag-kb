@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
 import HomePage from './pages/HomePage'
 import SpacePage from './pages/SpacePage'
+import AuditPage from './pages/AuditPage'
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const token = localStorage.getItem('access_token')
@@ -27,6 +28,14 @@ export default function App() {
           element={
             <RequireAuth>
               <SpacePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/audit"
+          element={
+            <RequireAuth>
+              <AuditPage />
             </RequireAuth>
           }
         />

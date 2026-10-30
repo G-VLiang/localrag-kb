@@ -37,6 +37,12 @@ export default function HomePage() {
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-600">{user?.username || user?.email}</span>
             <button
+              onClick={() => navigate('/audit')}
+              className="text-sm text-gray-500 hover:text-gray-700"
+            >
+              操作日志
+            </button>
+            <button
               onClick={() => {
                 logout()
                 navigate('/login')

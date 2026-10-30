@@ -11,6 +11,7 @@ import {
 } from '../api'
 import type { DocNode, KnowledgeBase } from '../api/types'
 import { indexDocument } from '../api/rag'
+import type { SearchHit } from '../api/rag'
 import { extractErrorMessage } from '../api/errors'
 import Editor from '../components/Editor'
 import ChatPanel from '../components/ChatPanel'
@@ -65,6 +66,23 @@ export default function SpacePage() {
     setContent(data.content)
     setContentFormat(data.content_format)
     setDirty(false)
+  }
+
+  // 点击问答引用 → 切到文档视图并打开对应文档
+  const openHit = async (hit: SearchHit) => {
+    if (!hit.node_id || !hit.knowledge_base_id) return
+    setView('docs')
+    const fake: DocNode = {
+      id: hit.node_id,
+      knowledge_base_id: hit.knowledge_base_id,
+      parent_id: null,
+      title: hit.document_title || '文档',
+      kind: 'document',
+      position: 0,
+      created_at: '',
+      updated_at: '',
+    }
+    await openNode(fake)
   }
 
   const handleSave = async () => {
@@ -213,7 +231,7 @@ export default function SpacePage() {
         </div>
 
         {view === 'chat' ? (
-          <ChatPanel kbIds={selectedKbs} />
+          <ChatPanel kbIds={selectedKbs} onOpenHit={openHit} />
         ) : activeNode ? (
           <>
             <div className="flex items-center justify-between bg-white border-b border-gray-200 px-4 py-2">

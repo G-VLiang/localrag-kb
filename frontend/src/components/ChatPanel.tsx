@@ -11,9 +11,10 @@ interface Message {
 
 interface ChatPanelProps {
   kbIds: string[]
+  onOpenHit?: (hit: SearchHit) => void
 }
 
-export default function ChatPanel({ kbIds }: ChatPanelProps) {
+export default function ChatPanel({ kbIds, onOpenHit }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -73,10 +74,20 @@ export default function ChatPanel({ kbIds }: ChatPanelProps) {
                   <p className="text-xs text-gray-500 font-medium">📚 来源引用：</p>
                   {m.hits.map((h, j) => (
                     <div key={j} className="text-xs text-gray-600">
-                      <span className="font-medium">
+                      <button
+                        type="button"
+                        onClick={() => onOpenHit?.(h)}
+                        disabled={!onOpenHit}
+                        title={onOpenHit ? '打开对应文档' : undefined}
+                        className={
+                          onOpenHit
+                            ? 'font-medium text-blue-600 hover:underline text-left'
+                            : 'font-medium text-left'
+                        }
+                      >
                         [{j + 1}] {h.document_title}
                         {h.heading ? ` › ${h.heading}` : ''}
-                      </span>
+                      </button>
                       <span className="text-gray-400"> (相关度 {(h.score * 100).toFixed(0)}%)</span>
                       <p className="text-gray-500 line-clamp-2">{h.content}</p>
                     </div>
