@@ -31,20 +31,28 @@
 └── docker-compose.yml
 ```
 
-## 快速开始（Docker，推荐）
+## 快速开始（Docker 一键部署）
 
-> 前提：已安装 Docker Desktop 及本地 Ollama（可选，跑 RAG 需要）。
+> 适合：企业内网单台服务器全栈部署（生产可用）。
+> 前提：已安装 Docker Engine / Docker Desktop。
 
 ```bash
-# 1. 启动全部服务（db + backend + frontend）
-docker compose up --build
+# 1. 准备环境变量（至少设置 JWT_SECRET，可用 openssl rand -hex 32 生成）
+cp .env.example .env
+vim .env                 # 填入 JWT_SECRET 等
 
-# 2. 访问
-#    前端 http://localhost:5173
-#    后端 API 文档 http://localhost:8000/docs
+# 2. 启动全部服务（nginx 反代 + 前端 + 后端 + 数据库）
+docker compose up -d --build
+
+# 3. 访问
+#    前端（唯一对外入口）：http://<服务器IP>   （默认 80 端口，可改 WEB_PORT）
+#    API 文档（经 nginx 透传）：http://<服务器IP>/docs
 ```
 
-数据库会自动执行 `alembic upgrade head` 建表，pgvector 扩展由镜像内置。
+- 数据库会自动执行 `alembic upgrade head` 建表，pgvector 扩展由镜像内置。
+- 后端**不对外暴露端口**，只经 nginx 反代 `/api` 提供服务，攻击面更小。
+- 生产环境 `DEBUG=false`，未设置强随机 `JWT_SECRET` 时后端会**启动即拒绝**。
+- 可选本地大模型：`docker compose --profile ollama up -d --build`，完全离线推理。
 
 ## 本地开发（不用 Docker）
 
@@ -84,10 +92,13 @@ EMBEDDING_PROVIDER=ollama
 EMBEDDING_MODEL=bge-m3
 LLM_PROVIDER=ollama
 LLM_MODEL=qwen2.5:7b
-OLLAMA_BASE_URL=http://host.docker.internal:11434
+# 集成式：启用 --profile ollama 时填容器内地址
+OLLAMA_BASE_URL=http://ollama:11434
+# 或：Ollama 装在宿主机时填（Docker Desktop 默认可用 host.docker.internal）
+# OLLAMA_BASE_URL=http://host.docker.internal:11434
 ```
 
-> 容器内访问宿主机的 Ollama 必须用 `host.docker.internal`（compose 已默认配置）。
+> 推荐用集成式 `ollama` 服务：`docker compose --profile ollama up -d`，后端通过 `http://ollama:11434` 访问，完全离线、无需宿主机装 Ollama。
 
 ### 方案 B：本地 sentence-transformers（不依赖 Ollama 做 Embedding）
 

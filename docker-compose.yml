@@ -1,58 +1,95 @@
+# LocalRAG KB — 企业内网一键部署
+#
+# 用法：
+#   cp .env.example .env && vim .env   # 至少必须设置 JWT_SECRET
+#   docker compose up -d --build
+#   浏览器访问 http://<服务器IP>  （默认 80 端口）
+#
+# 可选：启用本地大模型（Ollama，完全离线推理）
+#   docker compose --profile ollama up -d --build
+#   并拉取模型：docker exec -it localrag-ollama ollama pull bge-m3 qwen2.5:7b
+
 services:
   db:
     image: pgvector/pgvector:pg16
-    container_name: kb-db
+    container_name: localrag-db
     environment:
-      POSTGRES_USER: kb
-      POSTGRES_PASSWORD: kb_password
-      POSTGRES_DB: kb
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-kb}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kb_password}
+      POSTGRES_DB: ${POSTGRES_DB:-kb}
     volumes:
-      - kb_pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kb -d kb"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kb} -d ${POSTGRES_DB:-kb}"]
       interval: 5s
       timeout: 5s
       retries: 10
+    networks: [localrag]
+    restart: unless-stopped
 
   backend:
     build:
       context: ./backend
       args:
-        # 设为 1 可将 sentence-transformers 固化进镜像（构建慢约 10 分钟）
+        # 设为 1 将 sentence-transformers + torch 固化进镜像（构建多 5-10 分钟）
         INSTALL_RAG_DEPS: ${INSTALL_RAG_DEPS:-0}
-    container_name: kb-backend
+    container_name: localrag-backend
     environment:
-      DATABASE_URL: postgresql+psycopg2://kb:kb_password@db:5432/kb
-      OLLAMA_BASE_URL: http://host.docker.internal:11434
-      # 国内网络下载 HuggingFace 模型需走镜像
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-kb}:${POSTGRES_PASSWORD:-kb_password}@db:5432/${POSTGRES_DB:-kb}
+      DEBUG: "false"
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-local}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-bge-m3}
+      EMBEDDING_API_BASE: ${EMBEDDING_API_BASE:-}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:7b}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      LLM_API_BASE: ${LLM_API_BASE:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost}
       HF_ENDPOINT: https://hf-mirror.com
       HF_HUB_DISABLE_TELEMETRY: "1"
       HF_HUB_DISABLE_XET: "1"
-      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-local}
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-bge-m3}
-      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
-      LLM_MODEL: ${LLM_MODEL:-qwen2.5:7b}
-    ports:
-      - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
+    # 仅对内网暴露，不映射到宿主机；对外入口统一走 web(nginx)
+    expose:
+      - "8000"
+    networks: [localrag]
+    restart: unless-stopped
     command: >
       sh -c "alembic upgrade head &&
-             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
-  frontend:
+  web:
     build: ./frontend
-    container_name: kb-frontend
-    ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+    container_name: localrag-web
     depends_on:
       - backend
+    ports:
+      - "${WEB_PORT:-80}:80"
+    networks: [localrag]
+    restart: unless-stopped
+
+  # 可选：本地大模型服务（企业内网离线推理）。默认不启动，需时加 --profile ollama
+  ollama:
+    image: ollama/ollama:latest
+    container_name: localrag-ollama
+    profiles: ["ollama"]
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    networks: [localrag]
+    restart: unless-stopped
 
 volumes:
-  kb_pgdata:
+  pgdata:
+  ollama_data:
+
+networks:
+  localrag:
+    driver: bridge
