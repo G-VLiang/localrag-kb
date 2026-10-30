@@ -26,7 +26,8 @@ def build_prompt(query: str, hits: List[SearchHit]) -> str:
         loc = f"《{title}》"
         if getattr(h, "seq", None):
             loc += f"（片段{h.seq + 1}）"
-        ctx_parts.append(f"[{i}] {loc}\n{h.content}")
+        body = getattr(h, "context", "") or h.content
+        ctx_parts.append(f"[{i}] {loc}\n{body}")
     context = "\n\n".join(ctx_parts)
     return (
         f"参考资料：\n{context}\n\n用户问题：{query}\n\n"

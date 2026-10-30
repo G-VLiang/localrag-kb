@@ -48,6 +48,15 @@ class Settings(BaseSettings):
     top_k: int = 5
     use_rerank: bool = True  # 融合召回后做词法重排（中文友好），可设 false 退回纯 RRF
 
+    # 检索增强（RAG 深挖）
+    use_mmr: bool = True  # MMR 多样性重排，减少重复片段
+    mmr_lambda: float = 0.7  # 相关性 vs 多样性（越大越偏相关性）
+    parent_expand: bool = True  # 小切片召回 + 邻块上下文扩展（Small-to-Big）
+    parent_window: int = 1  # 左右各扩展几个邻块
+    max_context_chars: int = 6000  # 组装上下文总字符预算
+    rerank_provider: str = "lexical"  # lexical | cross-encoder
+    rerank_model: str = "BAAI/bge-reranker-base"
+
     # 跨域白名单（逗号分隔）；留空则开发态放开为 *（不携带凭证）
     cors_origins: str = ""
     # 分享链接生成的站点地址

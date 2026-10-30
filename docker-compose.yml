@@ -50,6 +50,12 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost}
       USE_RERANK: ${USE_RERANK:-true}
+      USE_MMR: ${USE_MMR:-true}
+      MMR_LAMBDA: ${MMR_LAMBDA:-0.7}
+      PARENT_EXPAND: ${PARENT_EXPAND:-true}
+      PARENT_WINDOW: ${PARENT_WINDOW:-1}
+      MAX_CONTEXT_CHARS: ${MAX_CONTEXT_CHARS:-6000}
+      RERANK_PROVIDER: ${RERANK_PROVIDER:-lexical}
       HF_ENDPOINT: https://hf-mirror.com
       HF_HUB_DISABLE_TELEMETRY: "1"
       HF_HUB_DISABLE_XET: "1"
