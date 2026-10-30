@@ -1,70 +1,112 @@
-# LocalRAG KB — 本地智能 RAG 知识库
+# LocalRAG KB — 企业内网智能知识库（RAG）
 
-语雀式知识沉淀 + RAG 智能检索，本地优先部署，可扩展至团队/企业多用户协作。
+语雀式知识沉淀 + RAG 智能问答，面向**团队/企业内网私有化部署**。
+
+团队成员把日常知识与经验沉淀为文档；任何人需要**顶替同事处理问题时**，用智能问答快速检索到答案与出处。
+
+## 特性
+
+- **团队协作**：团队空间、成员邀请（邮箱）、角色（owner/admin/editor/reader）
+- **知识沉淀**：知识库 + 文档树（文件夹/重命名/移动/删除）+ Tiptap 富文本编辑；导入 PDF/Word/Markdown/TXT（**自动建索引**）；版本历史；导出；分享链接（密码/有效期）
+- **高质量 RAG**：标题感知切片、向量 + 关键词混合检索、RRF 融合、词法重排、MMR 多样性、父块上下文扩展（Small-to-Big）、可选 cross-encoder 精排、可选 LLM 多路查询；答案带引用（文档 › 章节），**点击引用直达原文**
+- **审计合规**：写操作自动留痕；普通用户自助查看，管理员（`ADMIN_EMAILS`）查看全局
+- **生产级部署**：Nginx 静态托管 + `/api` 反代；backend 仅内网暴露；debug 默认关、生产强制 `JWT_SECRET`、CORS 白名单
+- **运维**：`scripts/backup.sh` / `restore.sh`；pytest + GitHub Actions CI
+- **多模型接入**：本地 sentence-transformers / Ollama / OpenAI 兼容云 API
 
 ## 技术栈
 
 | 层 | 选型 |
 |---|---|
 | 前端 | React 18 + TypeScript + Vite + Tailwind + Tiptap |
-| 后端 | Python 3.11 + FastAPI + SQLAlchemy 2 + Pydantic v2 |
+| 后端 | Python 3.11 + FastAPI + SQLAlchemy 2 + Pydantic v2 + Alembic |
 | 数据库 | PostgreSQL 16 + pgvector（关系 + 向量单库） |
-| 认证 | JWT（access + refresh） |
-| Embedding | bge-m3（本地，可选云 API） |
-| LLM | Ollama 本地（qwen2.5），预留 OpenAI 兼容接口 |
-| 部署 | Docker Compose |
+| 鉴权 | JWT（access + refresh）+ bcrypt |
+| 部署 | Docker Compose（db / backend / web(nginx) / ollama 可选） |
 
-## 目录结构
+## 快速开始（服务器部署）
 
-```
-├── backend/          # FastAPI 后端
-│   ├── app/
-│   │   ├── main.py   # 应用入口
-│   │   ├── config.py # 配置（.env）
-│   │   ├── db.py     # 数据库引擎/Session
-│   │   ├── models/   # ORM 模型
-│   │   ├── schemas/  # Pydantic schema
-│   │   ├── api/      # 路由
-│   │   └── deps.py   # 依赖注入
-│   └── alembic/      # 数据库迁移
-├── frontend/         # React 前端
-└── docker-compose.yml
-```
-
-## 快速开始（Docker 一键部署）
-
-> 适合：企业内网单台服务器全栈部署（生产可用）。
-> 前提：已安装 Docker Engine / Docker Desktop。
+> 面向服务器。单机笔记本不建议跑本地大模型；开发机只用来改代码。
 
 ```bash
-# 1. 准备环境变量（至少设置 JWT_SECRET，可用 openssl rand -hex 32 生成）
+git clone <your-repo-url> localrag-kb
+cd localrag-kb
 cp .env.example .env
-vim .env                 # 填入 JWT_SECRET 等
-
-# 2. 启动全部服务（nginx 反代 + 前端 + 后端 + 数据库）
+# 编辑 .env：JWT_SECRET、POSTGRES_PASSWORD、ADMIN_EMAILS，并配置模型
 docker compose up -d --build
-
-# 3. 访问
-#    前端（唯一对外入口）：http://<服务器IP>   （默认 80 端口，可改 WEB_PORT）
-#    API 文档（经 nginx 透传）：http://<服务器IP>/docs
 ```
 
-- 数据库会自动执行 `alembic upgrade head` 建表，pgvector 扩展由镜像内置。
-- 后端**不对外暴露端口**，只经 nginx 反代 `/api` 提供服务，攻击面更小。
-- 生产环境 `DEBUG=false`，未设置强随机 `JWT_SECRET` 时后端会**启动即拒绝**。
-- 可选本地大模型：`docker compose --profile ollama up -d --build`，完全离线推理。
+访问 `http://<服务器IP>`（默认 80，可改 `WEB_PORT`）；API 文档 `/docs`。
 
-## 本地开发（不用 Docker）
+- 部署细节：[docs/deployment.md](docs/deployment.md)
+- **模型配置（必读）**：[docs/model-setup.md](docs/model-setup.md)
+- 团队使用流程：[docs/usage.md](docs/usage.md)
+- 架构说明：[docs/architecture.md](docs/architecture.md)
+
+## 配置（`.env` 关键项）
+
+| 变量 | 说明 |
+|---|---|
+| `JWT_SECRET` | **生产必填**，强随机（`openssl rand -hex 32`） |
+| `POSTGRES_PASSWORD` | 数据库密码 |
+| `WEB_PORT` | 对外端口，默认 80 |
+| `ADMIN_EMAILS` | 全局管理员邮箱，逗号分隔 |
+| `EMBEDDING_PROVIDER` | `local` / `ollama` / `openai` |
+| `LLM_PROVIDER` | `ollama` / `openai` |
+| `OLLAMA_BASE_URL` | 默认 `http://ollama:11434` |
+| `EMBEDDING_API_BASE/KEY/MODEL` | 云 embedding（需 1024 维） |
+| `LLM_API_BASE/KEY/MODEL` | 云 LLM |
+| `USE_RERANK` / `USE_MMR` / `PARENT_EXPAND` | 检索增强开关（默认 true） |
+| `RERANK_PROVIDER` | `lexical`（零依赖）/ `cross-encoder` |
+| `USE_QUERY_REWRITE` | LLM 多路查询（默认 false，增延迟） |
+| `PUBLIC_BASE_URL` | 分享链接使用的站点地址 |
+
+> 完整变量见 [.env.example](.env.example)。
+
+## 项目结构
+
+```
+├── backend/                 # FastAPI 后端
+│   ├── app/
+│   │   ├── api/             # 路由：auth/spaces/knowledge_bases/documents/rag/share/audit
+│   │   ├── core/            # 安全、审计中间件、角色
+│   │   ├── models/          # ORM
+│   │   ├── schemas/         # Pydantic
+│   │   ├── rag/             # 切片/提取/embedding/检索/重排/LLM
+│   │   └── config.py
+│   ├── alembic/             # 迁移（0001~0006）
+│   └── tests/               # pytest
+├── frontend/                # React 前端（Vite）
+├── docs/                    # 部署/模型/使用/架构文档
+├── scripts/                 # backup.sh / restore.sh / install_rag_deps.sh
+├── docker-compose.yml
+└── .github/workflows/ci.yml
+```
+
+## API 概览
+
+| 模块 | 前缀 |
+|---|---|
+| 认证 | `/api/v1/auth/*` |
+| 空间与成员 | `/api/v1/spaces/*` |
+| 知识库 | `/api/v1/spaces/{id}/kb/*` |
+| 文档 | `/api/v1/kb/{id}/*`（树/内容/导入/导出/版本/搜索） |
+| RAG | `/api/v1/rag/*`（index/search/ask） |
+| 分享 | `/api/v1/nodes/{id}/share`、`/api/v1/share/access` |
+| 审计 | `/api/v1/audit`、`/api/v1/audit/all`（管理员） |
+
+## 开发与测试
 
 **后端**
 
 ```bash
 cd backend
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env   # 按需修改 DATABASE_URL 等
+pip install -r requirements.txt -r requirements-dev.txt
+cp .env.example .env        # 本地开发需 DEBUG=true 或设置 JWT_SECRET
 alembic upgrade head
 uvicorn app.main:app --reload
+pytest
 ```
 
 **前端**
@@ -72,138 +114,30 @@ uvicorn app.main:app --reload
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev      # http://localhost:5173，/api 代理到 8000
+npm run build
 ```
 
-## 启用 RAG 模型（重要）
+CI：`.github/workflows/ci.yml` 在 push/PR 时跑后端 pytest 与前端构建。
 
-RAG 检索/问答需要 **Embedding** 和 **LLM** 两个模型能力。系统支持三种组合，在 `backend/.env` 中切换。
-
-### 方案 A：完全本地（推荐，离线隐私最好）
+## 运维
 
 ```bash
-# 1. 安装 Ollama（https://ollama.com/download/Windows）
-# 2. 拉模型
-ollama pull bge-m3        # Embedding（约 1.2GB）
-ollama pull qwen2.5:7b    # LLM（约 4.7GB）
-
-# 3. 配置 backend/.env
-EMBEDDING_PROVIDER=ollama
-EMBEDDING_MODEL=bge-m3
-LLM_PROVIDER=ollama
-LLM_MODEL=qwen2.5:7b
-# 集成式：启用 --profile ollama 时填容器内地址
-OLLAMA_BASE_URL=http://ollama:11434
-# 或：Ollama 装在宿主机时填（Docker Desktop 默认可用 host.docker.internal）
-# OLLAMA_BASE_URL=http://host.docker.internal:11434
+bash scripts/backup.sh                     # 备份到 ./backups/*.sql.gz
+bash scripts/restore.sh ./backups/xxx.sql.gz
 ```
 
-> 推荐用集成式 `ollama` 服务：`docker compose --profile ollama up -d`，后端通过 `http://ollama:11434` 访问，完全离线、无需宿主机装 Ollama。
+管理员审计：`.env` 设 `ADMIN_EMAILS=admin@corp.com`，「操作日志」页可切「全部」。
+上线检查清单见 [README 运维章节](#运维) 与 [docs/deployment.md](docs/deployment.md)。
 
-### 方案 B：本地 sentence-transformers（不依赖 Ollama 做 Embedding）
+## 已知限制 / 路线图
 
-```bash
-# 方式 1：装进现有容器（快速，但容器重建后会丢失）
-bash scripts/install_rag_deps.sh
+- 空间级权限（暂无文档级细粒度权限）
+- 未内置 SSO/LDAP（可基于现有 JWT 扩展）
+- 向量维度固定 1024（换非 1024 维 embedding 需改 schema，见模型文档）
+- backend 单进程 uvicorn（小团队足够，可换 gunicorn/uvicorn workers 扩展）
+- cross-encoder 精排需额外依赖与模型（默认词法重排零依赖）
 
-# 方式 2：固化进镜像（推荐，一次构建长期可用）
-INSTALL_RAG_DEPS=1 docker compose build backend
-docker compose up -d backend
-```
+## 许可证
 
-然后配置 `backend/.env`：
-```bash
-EMBEDDING_PROVIDER=local
-EMBEDDING_LOCAL_PATH=BAAI/bge-m3
-```
-> 首次调用会自动从 HuggingFace 下载 bge-m3 模型（约 2.3GB）。
-> 国内网络已默认配置 `HF_ENDPOINT=https://hf-mirror.com` 镜像加速。
-
-### 方案 C：云端 API（最省事，效果最好）
-
-```bash
-EMBEDDING_PROVIDER=openai
-EMBEDDING_API_BASE=https://dashscope.aliyuncs.com/compatible-mode/v1
-EMBEDDING_API_KEY=sk-xxx
-EMBEDDING_MODEL=text-embedding-v3
-
-LLM_PROVIDER=openai
-LLM_API_BASE=https://dashscope.aliyuncs.com/compatible-mode/v1
-LLM_API_KEY=sk-xxx
-LLM_MODEL=qwen-plus
-```
-任何 OpenAI 兼容接口都行（通义/DeepSeek/OpenAI/智谱…）。
-
-### 验证模型是否就绪
-
-```bash
-curl http://localhost:8000/api/v1/health
-# 打开前端 → 文档编辑器 → 点「重建索引」，右上角会显示「已索引 N 个片段」
-```
-
-模型未就绪时接口返回 **503 + 明确中文提示**（不再是 500 报错）。
-
-## 进度
-
-- [x] P0 脚手架 + Docker 环境
-- [x] P1 后端基础：认证与组织 CRUD
-- [x] P2 前端基础：导航与富文本编辑器
-- [x] P3 RAG 核心：切片/向量化/混合检索
-- [x] P4 RAG 交互：对话式问答与引用
-- [x] P5 企业权限与分享
-- [x] P6 增强功能（导入/导出/版本历史/全文搜索）与部署文档
-
-## API 概览（39 个路由）
-
-| 模块 | 前缀 | 说明 |
-|---|---|---|
-| 认证 | `/api/v1/auth/*` | 注册/登录/刷新/me |
-| 空间 | `/api/v1/spaces/*` | 空间 CRUD + 成员管理 |
-| 知识库 | `/api/v1/spaces/{id}/kb/*` | 知识库 CRUD |
-| 文档 | `/api/v1/kb/{id}/*` | 文档树/内容/导入导出/版本/全文搜索 |
-| RAG | `/api/v1/rag/*` | 索引/混合检索/问答 |
-| 分享 | `/api/v1/nodes/{id}/share`, `/api/v1/share/access` | 分享链接（密码/有效期） |
-
-## 数据模型
-
-users · spaces · space_members · knowledge_bases · doc_nodes · documents · document_versions · doc_chunks(向量) · share_links
-
-## RAG 说明
-
-- **Embedding**：默认本地 `sentence-transformers` 加载 `BAAI/bge-m3`（1024 维），也可切 Ollama / OpenAI 兼容云 API（改 `.env` 的 `EMBEDDING_PROVIDER`）
-- **LLM**：默认 Ollama `qwen2.5:7b`，可切云 API（`LLM_PROVIDER=openai`）
-- **混合检索**：pgvector 向量余弦 + BM25 关键词融合（RRF），`doc_chunks` 用 HNSW 索引加速
-- 首次运行会下载 bge-m3 模型（约 2GB），请预留空间
-
-## 运维（企业内网）
-
-### 管理员审计
-在根目录 `.env` 设置管理员邮箱（逗号分隔），重启后端生效：
-
-```
-ADMIN_EMAILS=admin@example.com,ops@example.com
-```
-
-管理员登录后：`GET /api/v1/audit/all` 可查看全部操作；前端「操作日志」页对管理员显示「全部」切换。
-
-### 数据备份 / 恢复
-```bash
-# 备份（输出到 ./backups/localrag_db_<时间>.sql.gz）
-bash scripts/backup.sh
-
-# 恢复（会覆盖现有数据，谨慎）
-bash scripts/restore.sh ./backups/localrag_db_20261030xxxx.sql.gz
-```
-
-建议 cron 每日备份：
-
-```
-0 2 * * * cd /path/to/project && bash scripts/backup.sh >> /var/log/localrag-backup.log 2>&1
-```
-
-### 上线检查清单
-- [ ] `.env` 设置强随机 `JWT_SECRET`、`POSTGRES_PASSWORD`
-- [ ] 配置 Embedding/LLM（local / ollama / openai 三选一）并验证 `/api/v1/rag/ask`
-- [ ] 确认 `WEB_PORT` 与反向代理/防火墙策略
-- [ ] 配置 `ADMIN_EMAILS` 并验证全局审计
-- [ ] 配置定期备份（`scripts/backup.sh`）
+[MIT](LICENSE)
