@@ -61,6 +61,8 @@ class Settings(BaseSettings):
     use_query_rewrite: bool = False
     query_rewrite_count: int = 3
 
+    # 全局管理员邮箱（逗号分隔），可查看全部审计日志
+    admin_emails: str = ""
     # 跨域白名单（逗号分隔）；留空则开发态放开为 *（不携带凭证）
     cors_origins: str = ""
     # 分享链接生成的站点地址

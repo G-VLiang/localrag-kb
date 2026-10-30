@@ -174,3 +174,36 @@ users · spaces · space_members · knowledge_bases · doc_nodes · documents ·
 - **LLM**：默认 Ollama `qwen2.5:7b`，可切云 API（`LLM_PROVIDER=openai`）
 - **混合检索**：pgvector 向量余弦 + BM25 关键词融合（RRF），`doc_chunks` 用 HNSW 索引加速
 - 首次运行会下载 bge-m3 模型（约 2GB），请预留空间
+
+## 运维（企业内网）
+
+### 管理员审计
+在根目录 `.env` 设置管理员邮箱（逗号分隔），重启后端生效：
+
+```
+ADMIN_EMAILS=admin@example.com,ops@example.com
+```
+
+管理员登录后：`GET /api/v1/audit/all` 可查看全部操作；前端「操作日志」页对管理员显示「全部」切换。
+
+### 数据备份 / 恢复
+```bash
+# 备份（输出到 ./backups/localrag_db_<时间>.sql.gz）
+bash scripts/backup.sh
+
+# 恢复（会覆盖现有数据，谨慎）
+bash scripts/restore.sh ./backups/localrag_db_20261030xxxx.sql.gz
+```
+
+建议 cron 每日备份：
+
+```
+0 2 * * * cd /path/to/project && bash scripts/backup.sh >> /var/log/localrag-backup.log 2>&1
+```
+
+### 上线检查清单
+- [ ] `.env` 设置强随机 `JWT_SECRET`、`POSTGRES_PASSWORD`
+- [ ] 配置 Embedding/LLM（local / ollama / openai 三选一）并验证 `/api/v1/rag/ask`
+- [ ] 确认 `WEB_PORT` 与反向代理/防火墙策略
+- [ ] 配置 `ADMIN_EMAILS` 并验证全局审计
+- [ ] 配置定期备份（`scripts/backup.sh`）

@@ -22,6 +22,10 @@ class UserOut(UserBase):
     created_at: datetime
 
 
+class MeOut(UserOut):
+    is_admin: bool = False
+
+
 class Token(BaseModel):
     access_token: str
     refresh_token: str

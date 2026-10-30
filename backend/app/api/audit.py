@@ -1,8 +1,10 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, require_admin
 from app.models import AuditLog, User
 from app.schemas.audit import AuditLogOut
 
@@ -23,3 +25,17 @@ def list_my_audit(
         .limit(limit)
         .all()
     )
+
+
+@router.get("/all", response_model=list[AuditLogOut])
+def list_all_audit(
+    limit: int = Query(100, ge=1, le=500),
+    action: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """全局审计（仅管理员）：可按动作过滤。"""
+    q = db.query(AuditLog).order_by(AuditLog.created_at.desc())
+    if action:
+        q = q.filter(AuditLog.action == action)
+    return q.limit(limit).all()

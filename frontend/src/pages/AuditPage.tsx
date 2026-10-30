@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { listMyAudit } from '../api/audit'
+import { getMe } from '../api'
+import { listAllAudit, listMyAudit } from '../api/audit'
 import type { AuditLog } from '../api/audit'
 import { extractErrorMessage } from '../api/errors'
 
@@ -8,20 +9,49 @@ export default function AuditPage() {
   const [logs, setLogs] = useState<AuditLog[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [scope, setScope] = useState<'mine' | 'all'>('mine')
   const navigate = useNavigate()
 
   useEffect(() => {
-    listMyAudit(100)
+    getMe()
+      .then(({ data }) => setIsAdmin(!!data.is_admin))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    setLoading(true)
+    setError('')
+    const req = scope === 'all' ? listAllAudit(200) : listMyAudit(100)
+    req
       .then(({ data }) => setLogs(data))
       .catch((err) => setError(extractErrorMessage(err)))
       .finally(() => setLoading(false))
-  }, [])
+  }, [scope])
 
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-gray-900">操作日志</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-lg font-semibold text-gray-900">操作日志</h1>
+            {isAdmin && (
+              <div className="flex items-center gap-1 text-xs">
+                <button
+                  onClick={() => setScope('mine')}
+                  className={`px-2 py-1 rounded ${scope === 'mine' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}
+                >
+                  我的
+                </button>
+                <button
+                  onClick={() => setScope('all')}
+                  className={`px-2 py-1 rounded ${scope === 'all' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}
+                >
+                  全部
+                </button>
+              </div>
+            )}
+          </div>
           <button onClick={() => navigate('/')} className="text-sm text-gray-500 hover:text-gray-700">
             返回
           </button>
@@ -35,7 +65,7 @@ export default function AuditPage() {
         ) : logs.length === 0 ? (
           <div className="text-center text-gray-500 mt-10">
             <p>暂无操作记录</p>
-            <p className="text-sm mt-1">你的写操作（保存文档、建库、导入等）会记录在这里</p>
+            <p className="text-sm mt-1">写操作（保存文档、建库、导入等）会记录在这里</p>
           </div>
         ) : (
           <div className="overflow-x-auto bg-white rounded-lg border border-gray-200">

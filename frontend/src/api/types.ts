@@ -4,6 +4,7 @@ export interface User {
   username: string
   is_active: boolean
   created_at: string
+  is_admin?: boolean
 }
 
 export interface Space {

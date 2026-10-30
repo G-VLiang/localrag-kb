@@ -2,12 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
+from app.core.roles import is_admin_email
 from app.core.security import create_access_token, create_refresh_token, decode_token, verify_password
 from app.crud.user import create_user, get_user_by_email
 from app.db import get_db
 from app.deps import get_current_user
 from app.models import AuditLog, User
-from app.schemas.core import RefreshRequest, Token, UserCreate, UserOut
+from app.schemas.core import MeOut, RefreshRequest, Token, UserCreate, UserOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -73,6 +74,7 @@ def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
     )
 
 
-@router.get("/me", response_model=UserOut)
+@router.get("/me", response_model=MeOut)
 def me(current_user: User = Depends(get_current_user)):
-    return current_user
+    base = UserOut.model_validate(current_user)
+    return MeOut(**base.model_dump(), is_admin=is_admin_email(current_user.email))
