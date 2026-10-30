@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.deps import get_current_user
 from app.models import DocNode, Document, DocumentVersion, KnowledgeBase, SpaceMember, User
+from app.rag.indexer import index_document
 from app.rag.parser import parse_bytes
 from app.schemas.core import DocNodeCreate, DocNodeOut, DocNodeUpdate, DocumentOut, DocumentSave
 
@@ -205,9 +206,15 @@ async def import_document(
     )
     db.add(node)
     db.flush()
-    db.add(Document(node_id=node.id, content=text, content_format="markdown"))
+    doc = Document(node_id=node.id, content=text, content_format="markdown")
+    db.add(doc)
     db.commit()
     db.refresh(node)
+    # 导入后自动建索引（模型未就绪时静默跳过，不阻断导入；可稍后手动重建）
+    try:
+        index_document(db, doc)
+    except Exception:
+        db.rollback()
     return node
 
 

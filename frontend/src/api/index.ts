@@ -34,3 +34,25 @@ export const saveDocument = (kbId: string, nodeId: string, data: { content: stri
   api.put<Document>(`/kb/${kbId}/nodes/${nodeId}/content`, data)
 export const deleteNode = (kbId: string, nodeId: string) =>
   api.delete(`/kb/${kbId}/nodes/${nodeId}`)
+
+export const updateNode = (
+  kbId: string,
+  nodeId: string,
+  data: { title?: string; parent_id?: string | null; position?: number },
+) => api.patch<DocNode>(`/kb/${kbId}/nodes/${nodeId}`, data)
+
+export const importDocument = (kbId: string, file: File) => {
+  const form = new FormData()
+  form.append('file', file)
+  return api.post<DocNode>(`/kb/${kbId}/import`, form)
+}
+
+export interface KbSearchHit {
+  node_id: string
+  title: string
+  kind: string
+  updated_at: string
+}
+
+export const searchInKb = (kbId: string, q: string) =>
+  api.get<KbSearchHit[]>(`/kb/${kbId}/search`, { params: { q } })
