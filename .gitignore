@@ -1,0 +1,39 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Docker 数据卷（宿主机挂载）
+pgdata/
+
+# 工具/代理态（非产品代码）
+.workbuddy/
+
+# 调试/测试产物（Playwright 回归脚本与截图，非产品代码）
+frontend/e2e_*.mjs
+frontend/check_*.mjs
+frontend/debug_*.mjs
+frontend/verify_*.mjs
+frontend/regression_*.png
+frontend/e2e_*.png

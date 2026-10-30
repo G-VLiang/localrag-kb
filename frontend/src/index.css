@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tiptap 编辑器内容排版 */
+.ProseMirror {
+  min-height: 300px;
+  outline: none;
+  color: #1f2937;
+  line-height: 1.7;
+}
+.ProseMirror h1 {
+  font-size: 1.75em;
+  font-weight: 700;
+  margin: 0.8em 0 0.4em;
+}
+.ProseMirror h2 {
+  font-size: 1.4em;
+  font-weight: 700;
+  margin: 0.7em 0 0.35em;
+}
+.ProseMirror h3 {
+  font-size: 1.2em;
+  font-weight: 600;
+  margin: 0.6em 0 0.3em;
+}
+.ProseMirror p {
+  margin: 0.4em 0;
+}
+.ProseMirror ul,
+.ProseMirror ol {
+  padding-left: 1.5em;
+  margin: 0.4em 0;
+}
+.ProseMirror ul {
+  list-style: disc;
+}
+.ProseMirror ol {
+  list-style: decimal;
+}
+.ProseMirror blockquote {
+  border-left: 3px solid #d1d5db;
+  padding-left: 1em;
+  margin: 0.5em 0;
+  color: #6b7280;
+}
+.ProseMirror code {
+  background: #f3f4f6;
+  padding: 0.15em 0.4em;
+  border-radius: 3px;
+  font-size: 0.9em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.ProseMirror pre {
+  background: #1f2937;
+  color: #e5e7eb;
+  padding: 0.8em 1em;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+.ProseMirror pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin: 0.5em 0;
+}
+.ProseMirror a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+.ProseMirror hr {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 1em 0;
+}

@@ -1,0 +1,58 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: kb-db
+    environment:
+      POSTGRES_USER: kb
+      POSTGRES_PASSWORD: kb_password
+      POSTGRES_DB: kb
+    ports:
+      - "5432:5432"
+    volumes:
+      - kb_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kb -d kb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      args:
+        # 设为 1 可将 sentence-transformers 固化进镜像（构建慢约 10 分钟）
+        INSTALL_RAG_DEPS: ${INSTALL_RAG_DEPS:-0}
+    container_name: kb-backend
+    environment:
+      DATABASE_URL: postgresql+psycopg2://kb:kb_password@db:5432/kb
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      # 国内网络下载 HuggingFace 模型需走镜像
+      HF_ENDPOINT: https://hf-mirror.com
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      HF_HUB_DISABLE_XET: "1"
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-local}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-bge-m3}
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:7b}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  frontend:
+    build: ./frontend
+    container_name: kb-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  kb_pgdata:
